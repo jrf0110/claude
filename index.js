@@ -1,22 +1,15 @@
 // Please note, everything I've written for this has been
 // a quick and dirty hack. Maybe I'll refine everything later
 
-var
-  fs     = require('fs')
-
-, server = require('./server')
-, config = require('./config')
-;
-
 module.exports.init = function(options){
   if (!options.clientId)        throw new Error('Field `clientId` required.');
   if (!options.clientSecret)    throw new Error('Field `clientSecret` required.');
   if (!options.githubUserName)  throw new Error('Field `githubUserName` required.');
   if (!options.appDir)          throw new Error('Field `appDir` required.');
 
-  server.set('clientId', options.clientId);
-  server.set('clientSecret', options.clientSecret);
-  server.set('githubUserName', options.githubUserName);
+  var server = require('./server');
+
+  server.init(options);
 
   // Start server
   http.createServer(server).listen(server.get('port'), function(){

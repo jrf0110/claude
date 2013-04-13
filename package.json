@@ -9,7 +9,9 @@
     "express": "3.0.6",
     "hbs": "2.0.x",
     "forever-monitor": "1.1.x",
-    "suppose": "0.1.x"
+    "suppose": "0.1.x",
+    "deep-extend": "0.2.x",
+    "wrench": "1.4.x"
   },
   "readmeFilename": "README.md",
   "gitHead": "a4a4a6efee503a23842004752639ff0de7281560",
