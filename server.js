@@ -15,6 +15,7 @@ var
 , Monitor     = require('forever-monitor').Monitor
 
 , config      = require('./config')
+, utils       = require('./lib/utils')
 , errors      = require('./errors')
 , m           = require('./middleware')
 
@@ -27,6 +28,101 @@ var
 , processes = {}
 
 , data
+
+, cloneRepo = function(server, callback){
+    var git = suppose('git', ['clone', server.repo, app.get('appDir') + '/' + server.name]);
+
+    git.on('Username: ').respond(app.get('accessToken'));
+    git.on('Password: ').respond("");
+
+    git.error(function(error){
+      callback && callback(error);
+    });
+
+    git.end(callback);
+  }
+
+, startServer = function(server, callback){
+    // Figure out the entry point
+    fs.readFile(app.get('appDir') + '/' + server.name + '/package.json', function(error, pkg){
+      if (error) return callback(error);
+
+      pkg = JSON.parse(pkg);
+
+      processes[server.name] = new Monitor(
+        pkg.main.replace('./', app.get('appDir') + '/' + server.name + '/')
+      );
+
+      processes[server.name].start();
+
+      callback();
+    });
+  }
+
+, updateServer = utils.stage({
+    start: function(server, updates, next, done){
+      // Update data file
+      data.set(req.param('name'), updates, function(error){
+        if (error) done(errors.server.INTERNAL_SERVER_ERROR);
+
+        // Shutting down server
+        if (updates == false && processes[server.name])
+          next('shutDownServer', server);
+
+         // Starting server
+        else if (req.body.active == true)
+          next('startServer', server);
+
+        // Regular-ass update - no starting/stopping
+        else done();
+      });
+    }
+
+  , shutDownServer: function(server, next, done){
+      processes[server.name].on('exit', function(){
+        done();
+      });
+
+      processes[server.name].on('error', function(){
+        done(errors.server.INTERNAL_SERVER_ERROR);
+      });
+
+      processes[server.name].exit();
+    }
+
+  , ensureServerExists: function(server, next, done){
+      // Ensure that the server has been downloaded
+      fs.exists(app.get('appDir') + '/' + server.name + '/package.json', function(error, exists){
+        if (error) return done(errors.server.INTERNAL_SERVER_ERROR);
+
+        // Woot, we don't need to download
+        if (exists) next('startServer', server);
+
+        // Unforkunately, we've got to download this damn repo
+        else next('cloneRepo', server);
+    }
+
+  , cloneRepo: function(server, next, done){
+      cloneRepo(server, function(error){
+        if (error) return done(errors.server.INTERNAL_SERVER_ERROR);
+
+        next('installDependencies', server);
+      });
+    }
+
+  , installDependencies: function(server, next, done){
+      // TODO
+      next('startServer', server);
+    }
+
+  , startServer: function(server, next, done){
+      startServer(server, function(error){
+        if (error) done(errors.server.INTERNAL_SERVER_ERROR);
+
+        done();
+      });
+    }
+  })
 ;
 
 // Ensure data file exists
@@ -156,6 +252,8 @@ app.get('/apps', auth, function(req, res){
 app.post('/apps', auth, function(req, res){
   if (data.has(req.param('name'))) return res.error(errors.validation.APP_NAME_TAKEN);
 
+  req.body.active = false;
+
   data.set(req.param('name'), req.body, function(error){
     if (error) return res.status(500).send();
 
@@ -166,70 +264,10 @@ app.post('/apps', auth, function(req, res){
 app.put('/apps/:name', auth, function(req, res){
   if (!data.has(req.param('name'))) return res.status(404).send();
 
-  var server = data.get(req.param('name'));
+  updateServer(data.get(req.param('name')), req.body, function(error){
+    if (error) return res.error(error);
 
-  data.set(req.param('name'), req.body, function(error){
-    if (error) return res.status(500).send();
-
-    // Shutting down server
-    if (req.body.active == false && processes[server.name]){
-
-      processes[server.name].on('exit', function(){
-        res.status(204).send();
-      });
-
-      processes[server.name].exit();
-    }
-
-    // Starting server
-    else if (req.body.active == true){
-
-      // Already started the server once before
-      if (processes[server.name]){
-
-        processes[server.name].on('start', function(){
-          res.status(204).send();
-        });
-
-        processes[server.name].start();
-      }
-
-      // Server has not been started yet, so we need to find its path
-      else {
-        // Ensure that the server has been downloaded
-        fs.exists(config.appDir + '/' + server.name + '/package.json', function(error, exists){
-          if (error) return res.status(500).send();
-
-          // Woot, we don't need to download
-          if (exists){
-
-            // Figure out the entry point
-            var pkg = require(config.appDir + '/' + server.name + '/package.json');
-
-            processes[server.name] = new Monitor(pkg.main.replace('./', config.appDir + '/' + server.name + '/'));
-            return processes[server.name].start();
-          }
-
-          // Unforkunately, we've got to download this damn repo
-          var git = suppose('git', ['clone', server.repo, config.appDir + '/' + server.name]);
-
-          git.on('Username: ').respond(app.get('accessToken'));
-          git.on('Password: ').respond("");
-
-          git.error(function(error){
-            res.status(500).send();
-          });
-
-          git.end(function(){
-            // Repo has downloaded, NOW let's start the server
-            fs.writeFile(config.appDir + '/' + server.name + '/install.sh')
-          });
-        });
-      }
-    }
-
-    // Standard update
-    else res.status(204).send();
+    res.status(204).send();
   });
 });
 

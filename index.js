@@ -9,9 +9,10 @@ var
 ;
 
 module.exports.init = function(options){
-  if (!options.clientId) throw new Error('Field `clientId` required.');
-  if (!options.clientSecret) throw new Error('Field `clientSecret` required.');
-  if (!options.githubUserName) throw new Error('Field `githubUserName` required.');
+  if (!options.clientId)        throw new Error('Field `clientId` required.');
+  if (!options.clientSecret)    throw new Error('Field `clientSecret` required.');
+  if (!options.githubUserName)  throw new Error('Field `githubUserName` required.');
+  if (!options.appDir)          throw new Error('Field `appDir` required.');
 
   server.set('clientId', options.clientId);
   server.set('clientSecret', options.clientSecret);
