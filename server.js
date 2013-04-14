@@ -88,7 +88,8 @@ console.log(file);
   }
 
 , restartNginx = function(callback){
-    var service = suppose(config.nginx.split(' ')[0], config.nginx.split(' ').slice(1));
+  console.log(config.nginx.restartFileName);
+    var service = suppose('sudo', ['bash', config.nginx.restartFileName]);
 
     service.error(function(error){
       console.log(error);
@@ -99,7 +100,11 @@ console.log(file);
   }
 
 , restartNginxIfApplicable = function(server, callback){
+    fs.exists(config.appDir + '/' + server.name + '/' + config.nginx.serverFileName, function(exists){
+      if (!exists) return callback();
 
+      restartNginxIfApplicable(callback);
+    });
   }
 
 , updateServer = utils.stage({
@@ -125,7 +130,7 @@ console.log(file);
       processes[server.name].on('exit', function(code){
         if (!server.nginx) return done();
 
-        restartNginx(function(error){
+        restartNginxIfApplicable(function(error){
           if (error) return done(errors.server.INTERNAL_SERVER_ERROR);
 
           done();
@@ -200,6 +205,10 @@ app.init = function(options){
   // Get user configuration
   utils.deepExtend(config, options);
 
+  // If ./ in restartFilePath, replace with full
+  if (config.nginx.restartFileName.indexOf('./') == 0)
+    config.nginx.restartFileName = config.nginx.restartFileName.replace('./', process.cwd() + '/');
+
   // Ensure Nginx is configured
   var configFile = fs.readFileSync(config.nginx.configFile).toString();
 
@@ -216,6 +225,9 @@ app.init = function(options){
 
     fs.writeFileSync(config.nginx.configFile, configFile);
   }
+
+  // Write restart-nginx script
+  fs.writeFileSync(config.nginx.restartFileName, '#! /bin/bash\n\n' + config.nginx.restart);
 
   // Ensure data file exists
   if (!fs.existsSync(config.dataPath)){
@@ -383,7 +395,7 @@ app.init = function(options){
 
     req.body.active = false;
 
-    if (!req.body.subdomain) req.body.subdomain = req.body.name;
+    if (!req.body.subdomain && req.body.subdomain != '') req.body.subdomain = req.body.name;
 
     data.create(req.body, function(error){
       if (error) return res.status(500).send();
