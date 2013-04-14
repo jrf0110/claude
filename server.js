@@ -8,7 +8,6 @@ var
   express     = require('express')
 , fs          = require('fs')
 , spawn       = require('child_process').spawn
-, http        = require('http')
 , path        = require('path')
 , hbs         = require('hbs')
 , request     = require('request')
@@ -23,20 +22,22 @@ var
 , app         = express()
 
 , fields = {
-    apps: ['name', 'repo', 'description', 'active']
+    apps: ['name', 'subdomain', 'repo', 'description', 'active']
   }
 
 , processes = {}
 
 , data
 
-, cloneRepo = function(server, callback){
-    var git = suppose('git', ['clone', server.repo, config.appDir) + '/' + server.name]);
+, cloneRepo = function(user, server, callback){
+  console.log('cloning', server.repo, 'into', config.appDir + '/' + server.name)
+    var git = suppose('git', ['clone', server.repo.replace('https://', 'https://' + user.accessToken + '@'), config.appDir + '/' + server.name]);
 
-    git.on('Username: ').respond(config['accessToken']));
+    git.on('Username: ').respond(config.accessToken);
     git.on('Password: ').respond("");
 
     git.error(function(error){
+      console.log(error);
       callback && callback(error);
     });
 
@@ -58,9 +59,16 @@ var
 
       pkg = JSON.parse(pkg);
 
-      processes[server.name] = new Monitor(
-        pkg.main.replace('./', '') + config.appDir + '/' + server.name + '/' + pkg.main
-      );
+      var file = pkg.main;
+
+      if (!file) return callback(new Error('No main property'));
+
+      if (file.indexOf('./')) file = file.replace('./', '');
+
+      file = config.appDir + '/' + server.name + '/' + file;
+
+console.log(file);
+      processes[server.name] = new Monitor(file, { max: 1 });
 
       processes[server.name].start();
 
@@ -80,36 +88,43 @@ var
   }
 
 , restartNginx = function(callback){
-    var service = suppose('service', ['nginx', 'restart']);
+    var service = suppose(config.nginx.split(' ')[0], config.nginx.split(' ').slice(1));
 
     service.error(function(error){
+      console.log(error);
       callback && callback(error);
     });
 
     service.end(callback);
   }
 
+, restartNginxIfApplicable = function(server, callback){
+
+  }
+
 , updateServer = utils.stage({
-    start: function(server, updates, next, done){
+    start: function(user, server, updates, next, done){
       // Update data file
-      data.set(req.param('name'), updates, function(error){
+      data.set(updates.name, updates, function(error){
         if (error) done(errors.server.INTERNAL_SERVER_ERROR);
 
         // Shutting down server
-        if (updates == false && processes[server.name])
-          next('shutDownServer', server);
+        if (updates.active == false && processes[server.name])
+          next('shutDownServer', user, server);
 
          // Starting server
-        else if (req.body.active == true)
-          next('startServer', server);
+        else if (updates.active == true)
+          next('ensureServerExists', user, server);
 
         // Regular-ass update - no starting/stopping
         else done();
       });
     }
 
-  , shutDownServer: function(server, next, done){
+  , shutDownServer: function(user, server, next, done){
       processes[server.name].on('exit', function(code){
+        if (!server.nginx) return done();
+
         restartNginx(function(error){
           if (error) return done(errors.server.INTERNAL_SERVER_ERROR);
 
@@ -121,41 +136,57 @@ var
         done(errors.server.INTERNAL_SERVER_ERROR);
       });
 
-      processes[server.name].exit();
+      processes[server.name].stop();
     }
 
-  , ensureServerExists: function(server, next, done){
+  , ensureServerExists: function(user, server, next, done){
+    console.log(', ensureServerExists');
+    console.log(config.appDir + '/' + server.name + '/package.json');
       // Ensure that the server has been downloaded
-      fs.exists(config.appDir) + '/' + server.name + '/package.json', function(error, exists){
-        if (error) return done(errors.server.INTERNAL_SERVER_ERROR);
+      fs.exists(config.appDir + '/' + server.name + '/package.json', function(exists){
 
         // Woot, we don't need to download
-        if (exists) return next('startServer', server);
+        if (exists) return next('startServer', user, server);
 
         // Unforkunately, we've got to download this damn repo
-        next('cloneRepo', server);
+        next('cloneRepo', user, server);
       });
     }
 
-  , cloneRepo: function(server, next, done){
-      cloneRepo(server, function(error){
+  , cloneRepo: function(user, server, next, done){
+    console.log(', cloneRepo');
+      cloneRepo(user, server, function(error){
         if (error) return done(errors.server.INTERNAL_SERVER_ERROR);
 
         // Make sure nginx knows about any new server docs
         restartNginx(function(error){
           if (error) return done(errors.server.INTERNAL_SERVER_ERROR);
 
-          next('installDependencies', server);
+          next('installDependencies', user, server);
         });
       });
     }
 
-  , installDependencies: function(server, next, done){
-      // TODO
-      next('startServer', server);
+  , installDependencies: function(user, server, next, done){
+      var npm = spawn('npm', ['--prefix', config.appDir + '/' + server.name, 'install', config.appDir + '/' + server.name])
+
+      npm.on('error', function(error){
+        console.log(error);
+        done(error)
+      });
+
+      npm.on('data', function(msg){
+        console.log(msg);
+      });
+
+      npm.on('close', function(){
+        next('startServer', user, server);
+      });
+
     }
 
-  , startServer: function(server, next, done){
+  , startServer: function(user, server, next, done){
+    console.log(', startServer');
       startServer(server, function(error){
         if (error) done(errors.server.INTERNAL_SERVER_ERROR);
 
@@ -170,7 +201,7 @@ app.init = function(options){
   utils.deepExtend(config, options);
 
   // Ensure Nginx is configured
-  var configFile = fs.readFileSync(config.nginx.configFile);
+  var configFile = fs.readFileSync(config.nginx.configFile).toString();
 
   // Nginx isn't configured properly
   if (configFile.indexOf('include ' + config.appDir + '/*/' + config.nginx.serverFileName) == -1){
@@ -179,8 +210,8 @@ app.init = function(options){
     configFile = configFile.replace(
       config.nginx.includeDetection
     , config.nginx.includeDetection
-      + '\n\tinclude'
-      + config.appDir + '/*/' + config.nginx.serverFileName
+      + '\n' + config.nginx.tab + 'include '
+      + config.appDir + '/*/' + config.nginx.serverFileName + ';'
     );
 
     fs.writeFileSync(config.nginx.configFile, configFile);
@@ -218,7 +249,8 @@ app.init = function(options){
     }
 
     fs['writeFile' + (callback ? '' : 'Sync')](
-      'module.exports = ' + JSON.stringify(data, '  ', true)
+      config.dataPath
+    , 'module.exports = ' + JSON.stringify(data, '  ', true)
     , callback
     );
 
@@ -226,9 +258,11 @@ app.init = function(options){
   };
 
   data.create = function(props, callback){
-    data.push([i]);
+    data.push(props);
+
     fs.writeFile(
-      'module.exports = ' + JSON.stringify(data, '  ', true)
+      config.dataPath
+    , 'module.exports = ' + JSON.stringify(data, '  ', true)
     , callback
     );
   };
@@ -240,74 +274,94 @@ app.init = function(options){
 
   // Setup express app
   app.configure(function(){
-    app.set('port', process.env.PORT || config.pot);
+    app.set('port', process.env.PORT || config.port);
     app.set('views', __dirname + '/views');
     app.set('view engine', 'hbs');
     app.use(express.favicon());
     app.use(express.logger('dev'));
     app.use(express.bodyParser());
     app.use(express.methodOverride());
-    app.use(app.router);
-    app.use(express.static(path.join(__dirname, 'public')));
     app.use(express.cookieParser('TODO: Replace cookie parser'));
+    app.use(express.cookieSession());
     app.use(m.error);
+
+    app.use(app.router);
   });
 
   app.configure('development', function(){
     app.use(express.errorHandler());
   });
 
-  app.get('/', routes.index);
+  // app.get('/', routes.index);
 
-  app.get('/oauth-callback', function(req, res){
+  app.post('/oauth', function(req, res){
     var options = {
-      url: config.githubAccessTokenUrl
+      url: config.github.accessTokenUrl + utils.queryParams({
+        code:           req.body.code
+      , client_id:      config.github.clientId
+      , client_secret:  config.github.clientSecret
+      })
 
     , method: 'POST'
 
     , json: true
-
-    , body: {
-        code:         req.param('code')
-      , clientId:     config.github.clientId
-      , clientSecret: config['clientSecret']
-      }
     };
 
     request(options, function(error, response, body){
+      console.log(body);
       if (error)
-        return res.render('oauth-complete', { error: errors.auth.UNKNOWN_OAUTH });
+        return res.error(errors.auth.UNKNOWN_OAUTH);
 
       if (!body.access_token)
-        return res.render('oauth-complete', { error: errors.auth.UNKNOWN_OAUTH });
+        return res.error(errors.auth.UNKNOWN_OAUTH);
 
-      res.render('oauth-complete', { accessToken: body.access_token });
+      var url = config.github.userProfileUrl + '?access_token=' + body.accessToken;
+      var accessToken = body.accessToken;
+
+      // Get user profile
+      request.get(url, function(error, response, body){
+        if (error) return res.error(errors.auth.INVALID_ACCESS_TOKEN);
+
+        body = JSON.parse(body);
+
+        if (body.login != config.github.username) return res.error(errors.auth.INVALID_ACCESS_TOKEN);
+
+        req.session.user = body;
+        req.session.user.accessToken = accessToken;
+
+        res.json(body);
+      });
     });
   });
 
   app.get('/oauth', function(req, res){
-    res.redirect(
-      config.githubOuathUrl
-    + '?client_id=' + config.github.clientId
-    );
+    res.json({
+      url: config.github.oauthUrl
+        + '?client_id='
+        + config.github.clientId
+        + '&scope='
+        + config.github.scopes.join(',')
+    });
   });
 
   app.post('/session', function(req, res){
     if (!req.body.accessToken) return res.error(errors.auth.INVALID_ACCESS_TOKEN);
 
-    var url = config.githubUserUrl + '?access_token=' + req.body.accessToken;
+    var url = config.github.userProfileUrl + '?access_token=' + req.body.accessToken;
 
     // Ensure Access token belongs to server owner
     request.get(url, function(error, response, body){
       if (error) return res.error(errors.auth.INVALID_ACCESS_TOKEN);
 
-      if (body.login != config.github.username) return res.error(errors.auth.INVALID_ACCESS_TOKEN);
+        body = JSON.parse(body);
+        console.log(body.login, config.github.username);
 
-      app.set('accessToken', req.body.accessToken);
+        if (body.login != config.github.username) return res.error(errors.auth.INVALID_ACCESS_TOKEN);
 
-      req.session.user = body;
+        req.session.user = body;
+        req.session.user.accessToken = req.body.accessToken;
 
-      res.json(body);
+        res.json(body);
     });
   });
 
@@ -315,14 +369,21 @@ app.init = function(options){
     res.json(req.session.user);
   });
 
-  app.get('/apps', auth, function(req, res){
+  app.del('/session', function(req, res){
+    delete req.session.user;
+    res.status(204).send();
+  });
+
+  app.get('/apps', m.auth, function(req, res){
     res.send(data);
   });
 
-  app.post('/apps', auth, function(req, res){
+  app.post('/apps', m.auth, function(req, res){
     if (data.has(req.body.name)) return res.error(errors.validation.APP_NAME_TAKEN);
 
     req.body.active = false;
+
+    if (!req.body.subdomain) req.body.subdomain = req.body.name;
 
     data.create(req.body, function(error){
       if (error) return res.status(500).send();
@@ -331,23 +392,27 @@ app.init = function(options){
     });
   });
 
-  app.put('/apps/:name', auth, function(req, res){
+  app.put('/apps/:name', m.auth, function(req, res){
     if (!data.has(req.param('name'))) return res.status(404).send();
 
-    updateServer(data.get(req.param('name')), req.body, function(error){
+    updateServer(req.session.user, data.get(req.param('name')), req.body, function(error){
       if (error) return res.error(error);
 
       res.status(204).send();
     });
   });
 
-  app.post('/apps/:name/deploy' auth, function(req, res){
+  app.put('/apps/:name', m.auth, function(req, res){
+
+  });
+
+  app.post('/apps/:name/deploy', m.auth, function(req, res){
     if (!data.has(req.param('name'))) return res.status(404).send();
 
     var server = data.get(req.param('name'));
 
     // Turn off server if active
-    updateServer(server, { active: false }, function(error){
+    updateServer(req.session.user, server, { active: false }, function(error){
       if (error) return res.error(errors.server.INTERNAL_SERVER_ERROR);
 
       // Remove current server directory
@@ -355,9 +420,9 @@ app.init = function(options){
         if (error) return res.error(errors.server.INTERNAL_SERVER_ERROR);
 
         // Re-activate server
-        updateServer(server, { active: true }, function(error){
+        updateServer(req.session.user, server, { active: true }, function(error){
           if (error) return res.error(errors.server.INTERNAL_SERVER_ERROR);
-          
+
           res.status(204).send();
         });
       });

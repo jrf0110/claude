@@ -7,7 +7,10 @@ module.exports = {
   , accessTokenUrl: 'https://github.com/login/oauth/access_token'
 
     // URL to get user profile and ensure user is correct user
-  , userProfileUrl: ''
+  , userProfileUrl: 'https://api.github.com/user'
+
+    // What we need from the user
+  , scopes: ['user', 'repo']
   }
 
 , nginx: {
@@ -19,6 +22,12 @@ module.exports = {
 
     // String to search for to place inlcude statement after in config
   , includeDetection: 'include /etc/nginx/sites-enabled/*;'
+
+    // String to use for a tab in nginx config file
+  , tab: '\t'
+
+    // How to restart nginx
+  , restart: 'service nginx restart'
   }
 
 , dataPath: './data.js'

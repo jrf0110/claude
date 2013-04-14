@@ -80,6 +80,7 @@ errors.validation.APP_NAME_TAKEN = {
 };
 errors[errors.validation.APP_NAME_TAKEN.code] = errors.validation.APP_NAME_TAKEN;
 
+errors.server = {};
 
 errors.server.INTERNAL_SERVER_ERROR = {
   type:     "server"
@@ -88,4 +89,4 @@ errors.server.INTERNAL_SERVER_ERROR = {
 , name:     "INTERNAL_SERVER_ERROR"
 , message:  "The name provided for this app has already been taken"
 };
-errors[errors.validation.INTERNAL_SERVER_ERROR.code] = errors.validation.INTERNAL_SERVER_ERROR;
+errors[errors.server.INTERNAL_SERVER_ERROR.code] = errors.server.INTERNAL_SERVER_ERROR;
