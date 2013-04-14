@@ -38,6 +38,8 @@ claude.init({
 });
 ```
 
+You can look at my claude server [here](https://github.com/jrf0110/apps-server).
+
 Claude uses Nginx for static resources and virtual host setup. It's not necessary to include one. Claude will still host your app on whatever port you want, but you're on your own as far as sub-domains are concerned. Your nginx file should look something like this:
 
 ```
