@@ -1,7 +1,6 @@
 {
   "name": "claude",
   "version": "0.0.1",
-  "private": true,
   "scripts": {
     "start": "node app"
   },
@@ -14,7 +13,6 @@
     "wrench": "1.4.x"
   },
   "readmeFilename": "README.md",
-  "gitHead": "a4a4a6efee503a23842004752639ff0de7281560",
   "description": "Claude Shannon was an American mathematician, electronic engineer, and cryptographer known as \"The father of information theory\". Claude.js is web server manager for node.js.",
   "main": "index.js",
   "repository": {
