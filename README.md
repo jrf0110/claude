@@ -1,6 +1,6 @@
 # Claude.js - An App Manager for Servers
 
-Claude Shannon was an American mathematician, electronic engineer, and cryptographer known as "The father of information theory". Claude.js is deployment server for node.js apps. It allows you very easily deploy your apps to a VPS.
+Claude Shannon was an American mathematician, electronic engineer, and cryptographer known as "The father of information theory". Claude.js is a deployment server for node.js apps. It allows you to very easily deploy your apps to a VPS.
 
 Claude assumes you're setting up individual node.js apps at your domain like:
 
