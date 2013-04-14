@@ -414,10 +414,6 @@ app.init = function(options){
     });
   });
 
-  app.put('/apps/:name', m.auth, function(req, res){
-
-  });
-
   app.post('/apps/:name/deploy', m.auth, function(req, res){
     if (!data.has(req.param('name'))) return res.status(404).send();
 
