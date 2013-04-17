@@ -153,8 +153,16 @@ console.log(file);
         // Woot, we don't need to download
         if (exists) return next('startServer', user, server);
 
-        // Unforkunately, we've got to download this damn repo
-        next('cloneRepo', user, server);
+        // Is it just the package json that doesn't exist?
+        fs.exists(config.appDir + '/' + server.name, function(exists){
+          
+          // Woot, we don't need to download
+          if (exists) return next('startServer', user, server);
+
+          // Unforkunately, we've got to download this damn repo
+          next('cloneRepo', user, server);
+        });
+
       });
     }
 
