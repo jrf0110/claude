@@ -80,6 +80,15 @@ errors.validation.APP_NAME_TAKEN = {
 };
 errors[errors.validation.APP_NAME_TAKEN.code] = errors.validation.APP_NAME_TAKEN;
 
+errors.validation.INVALID_PACKAGE = {
+  type:     "validation"
+, code:     "0103"
+, httpCode: "401"
+, name:     "INVALID_PACKAGE"
+, message:  "Missing or malformed package.json"
+};
+errors[errors.validation.INVALID_PACKAGE.code] = errors.validation.INVALID_PACKAGE;
+
 errors.server = {};
 
 errors.server.INTERNAL_SERVER_ERROR = {

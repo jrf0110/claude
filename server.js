@@ -154,12 +154,11 @@ console.log(file);
         if (exists) return next('startServer', user, server);
 
         // Is it just the package json that doesn't exist?
-        fs.exists(config.appDir + '/' + server.name, function(exists){
-          
-          // Woot, we don't need to download
-          if (exists) return next('startServer', user, server);
+        fs.exists(config.appDir + '/' + server.name + '/package.json', function(exists){
 
-          // Unforkunately, we've got to download this damn repo
+          if (!exists) done(errors.validation.INVALID_PACKAGE);
+
+          // Download repo
           next('cloneRepo', user, server);
         });
 
