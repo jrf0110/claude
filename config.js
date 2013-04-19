@@ -27,10 +27,7 @@ module.exports = {
   , tab: '\t'
 
     // How to restart nginx
-  , restart: 'service nginx restart'
-
-    // Filename the restart command is going into
-  , restartFileName: './restart-nginx'
+  , restart: '/etc/init.d/nginx restart'
   }
 
 , dataPath: './data.js'

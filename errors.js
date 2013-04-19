@@ -65,7 +65,7 @@ errors.validation = {};
 errors.validation.NO_VALID_FIELDS = {
   type:     "validation"
 , code:     "0101"
-, httpCode: "401"
+, httpCode: "400"
 , name:     "NO_VALID_FIELDS"
 , message:  "This resource requires parameters on the query or body that we're not found."
 };
@@ -74,7 +74,7 @@ errors[errors.validation.NO_VALID_FIELDS.code] = errors.validation.NO_VALID_FIEL
 errors.validation.APP_NAME_TAKEN = {
   type:     "validation"
 , code:     "0102"
-, httpCode: "401"
+, httpCode: "400"
 , name:     "APP_NAME_TAKEN"
 , message:  "The name provided for this app has already been taken"
 };
@@ -83,7 +83,7 @@ errors[errors.validation.APP_NAME_TAKEN.code] = errors.validation.APP_NAME_TAKEN
 errors.validation.INVALID_PACKAGE = {
   type:     "validation"
 , code:     "0103"
-, httpCode: "401"
+, httpCode: "400"
 , name:     "INVALID_PACKAGE"
 , message:  "Missing or malformed package.json"
 };

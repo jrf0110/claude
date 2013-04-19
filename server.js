@@ -89,7 +89,7 @@ console.log(file);
 
 , restartNginx = function(callback){
   console.log(config.nginx.restartFileName);
-    var service = suppose('sudo', ['bash', config.nginx.restartFileName]);
+    var service = suppose('sudo', config.nginx.restart.split(' '));
 
     service.error(function(error){
       console.log(error);
